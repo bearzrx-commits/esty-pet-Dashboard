@@ -9,8 +9,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
-      "memory": 512,
-      "nodeVersion": "20.x"
+      "memory": 512
     }
   }
 }
