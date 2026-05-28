@@ -18,6 +18,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/logistics', require('./routes/logistics'));
+app.use('/api/tracking', require('./routes/tracking'));
 app.use('/api/etsy', require('./routes/etsy'));
 
 // 健康检查
@@ -107,8 +108,63 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // Vercel Serverless 导出
 module.exports = app;
 
+// 自动同步物流状态（每2小时执行一次）
+async function autoSyncLogistics() {
+  try {
+    console.log('[自动同步] 开始检查运输中的物流...');
+    const { data: inTransit } = await supabase
+      .from('logistics')
+      .select('*')
+      .in('status', ['picked_up', 'in_transit'])
+      .not('tracking_number', 'is', null)
+      .not('tracking_number', 'eq', '');
+
+    if (!inTransit || inTransit.length === 0) {
+      console.log('[自动同步] 无运输中的物流记录');
+      return;
+    }
+
+    const { queryTracking } = require('./services/trackingService');
+    const STATE_MAP = { '0': 'in_transit', '1': 'picked_up', '3': 'delivered', '2': 'exception', '4': 'exception', '5': 'in_transit', '6': 'exception', '201': 'in_transit' };
+
+    for (const item of inTransit) {
+      try {
+        const result = await queryTracking(item.carrier, item.tracking_number);
+        if (!result.success) continue;
+        const newStatus = STATE_MAP[String(result.state)] || item.status;
+        if (newStatus !== item.status) {
+          const updateData = { status: newStatus, updated_at: new Date().toISOString() };
+          if (newStatus === 'delivered') updateData.actual_delivery = new Date().toISOString();
+          await db.update('logistics', item.id, updateData);
+          if (newStatus === 'delivered') {
+            await db.update('orders', item.order_id, { status: 'shipped', updated_at: new Date().toISOString() });
+          }
+          console.log(`[自动同步] ${item.id}: ${item.status} → ${newStatus}`);
+        }
+      } catch (e) {
+        console.error(`[自动同步] ${item.id} 同步失败:`, e.message);
+      }
+    }
+  } catch (err) {
+    console.error('[自动同步] 执行失败:', err.message);
+  }
+}
+
 // 本地开发模式
 if (!process.env.VERCEL) {
+  // 启动定时同步（每2小时）
+  try {
+    const cron = require('node-cron');
+    cron.schedule('0 */2 * * *', () => {
+      autoSyncLogistics();
+    });
+    console.log('[自动同步] 定时任务已启动（每2小时）');
+    // 启动时执行一次
+    autoSyncLogistics();
+  } catch (e) {
+    console.log('[自动同步] node-cron 未安装，跳过定时任务。运行 npm install node-cron 安装');
+  }
+
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
     console.log(`Etsy 后台管理系统已启动`);

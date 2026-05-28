@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Image, Table, Timeline, Button, Space, Spin, Typography, Divider, Steps, Select, Input, message, Modal, Empty } from 'antd';
-import { ArrowLeftOutlined, CheckCircleOutlined, CarOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckCircleOutlined, CarOutlined, UserOutlined, SendOutlined } from '@ant-design/icons';
 import { orderApi, authApi, supplierApi, logisticsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
+import TrackingTimeline from '../components/TrackingTimeline';
 
 const { Title, Text } = Typography;
 
@@ -25,6 +26,7 @@ export default function OrderDetail() {
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
   const [logisticsForm, setLogisticsForm] = useState({ carrier: '', tracking_number: '', weight_kg: '' });
+  const [trackingModal, setTrackingModal] = useState<any>(null);
 
   useEffect(() => { loadOrder(); if (isAdmin) loadSuppliers(); }, [id]);
 
@@ -191,6 +193,12 @@ export default function OrderDetail() {
                   <Descriptions.Item label="状态"><Tag>{logisticsStatusLabels[log.status] || log.status}</Tag></Descriptions.Item>
                   <Descriptions.Item label="发货时间">{log.shipped_at ? new Date(log.shipped_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
                 </Descriptions>
+                {log.tracking_number && (
+                  <Button size="small" type="link" icon={<SendOutlined />}
+                    onClick={() => setTrackingModal(log)} style={{ marginTop: 8 }}>
+                    查看物流轨迹
+                  </Button>
+                )}
               </Card>
             ))}
           </>
@@ -212,6 +220,17 @@ export default function OrderDetail() {
           <Input placeholder="重量（kg，可选）" type="number" value={logisticsForm.weight_kg} onChange={e => setLogisticsForm(p => ({ ...p, weight_kg: e.target.value }))} />
         </div>
       </Modal>
+
+      {/* 物流轨迹弹窗 */}
+      {trackingModal && (
+        <TrackingTimeline
+          logisticsId={trackingModal.id}
+          carrier={trackingModal.carrier}
+          trackingNumber={trackingModal.tracking_number}
+          visible={!!trackingModal}
+          onClose={() => setTrackingModal(null)}
+        />
+      )}
     </div>
   );
 }

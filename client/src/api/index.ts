@@ -71,6 +71,8 @@ export const logisticsApi = {
   updateStatus: (id: string, data: { status: string; tracking_number?: string }) =>
     api.put(`/logistics/${id}/status`, data).then(r => r.data),
   getByOrder: (orderId: string) => api.get(`/logistics/order/${orderId}`).then(r => r.data),
+  queryTracking: (logisticsId: string) => api.get(`/tracking/${logisticsId}`).then(r => r.data),
+  syncTracking: (logisticsId: string) => api.post(`/tracking/sync/${logisticsId}`).then(r => r.data),
 };
 
 // ====== Etsy API ======

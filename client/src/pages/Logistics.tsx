@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Button, Space, Card, Modal, Input, Select, message, Typography, Descriptions, Empty, Row, Col, Statistic } from 'antd';
-import { CarOutlined, PlusOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Space, Card, Modal, Input, Select, message, Typography, Descriptions, Empty } from 'antd';
+import { CarOutlined, PlusOutlined, ReloadOutlined, EyeOutlined, SendOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { logisticsApi, orderApi } from '../api';
 import { useAuth } from '../context/AuthContext';
+import TrackingTimeline from '../components/TrackingTimeline';
 
 const { Title, Text } = Typography;
 const statusLabels: Record<string, string> = { pending: '待发货', ready: '已打包', picked_up: '已揽收', in_transit: '运输中', delivered: '已签收', exception: '异常' };
@@ -18,6 +19,7 @@ export default function Logistics() {
   const [newLogistics, setNewLogistics] = useState({ order_id: '', carrier: '', tracking_number: '', weight_kg: '' });
   const [statusUpdate, setStatusUpdate] = useState({ status: '', tracking_number: '' });
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [trackingModal, setTrackingModal] = useState<any>(null);
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
 
@@ -68,6 +70,12 @@ export default function Logistics() {
       render: (_: any, record: any) => (
         <Space>
           <Button size="small" onClick={() => navigate(`/orders/${record.order_id}`)}><EyeOutlined /> 查看订单</Button>
+          {record.tracking_number && (
+            <Button size="small" type="primary" ghost icon={<SendOutlined />}
+              onClick={() => setTrackingModal(record)}>
+              查看轨迹
+            </Button>
+          )}
           {isAdmin && <Button size="small" onClick={() => { setStatusModal(record); setStatusUpdate({ status: record.status, tracking_number: record.tracking_number || '' }); }}>更新状态</Button>}
         </Space>
       )
@@ -119,6 +127,17 @@ export default function Logistics() {
           <Input placeholder="运单号（可选，填写或修改）" style={{ marginTop: 12 }} value={statusUpdate.tracking_number} onChange={e => setStatusUpdate(p => ({ ...p, tracking_number: e.target.value }))} />
         </div>}
       </Modal>
+
+      {/* 物流轨迹弹窗 */}
+      {trackingModal && (
+        <TrackingTimeline
+          logisticsId={trackingModal.id}
+          carrier={trackingModal.carrier}
+          trackingNumber={trackingModal.tracking_number}
+          visible={!!trackingModal}
+          onClose={() => setTrackingModal(null)}
+        />
+      )}
     </div>
   );
 }
