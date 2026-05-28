@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token) {
       authApi.getMe()
-        .then((data) => setUser(data.user))
+        .then((data) => setUser(data))
         .catch(() => { localStorage.removeItem('token'); setToken(null); })
         .finally(() => setLoading(false));
     } else {
