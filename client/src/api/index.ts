@@ -34,6 +34,7 @@ export const authApi = {
   getMe: () => api.get('/auth/me').then(r => r.data),
   getUsers: () => api.get('/auth/users').then(r => r.data),
   createUser: (data: any) => api.post('/auth/users', data).then(r => r.data),
+  updateUser: (id: string, data: any) => api.put(`/auth/users/${id}`, data).then(r => r.data),
 };
 
 // ====== 仪表盘 API ======

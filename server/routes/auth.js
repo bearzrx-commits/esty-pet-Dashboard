@@ -91,4 +91,32 @@ router.post('/users', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// 更新用户（管理员）
+router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, company, active } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (email !== undefined) updates.email = email;
+    if (phone !== undefined) updates.phone = phone;
+    if (company !== undefined) updates.company = company;
+    if (active !== undefined) updates.active = active;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: '没有要更新的字段' });
+    }
+
+    const updated = await db.update('users', id, updates);
+    if (!updated || updated.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    const { password, ...userInfo } = updated[0];
+    res.json(userInfo);
+  } catch (err) {
+    console.error('Update user error:', err);
+    res.status(500).json({ error: '更新用户失败' });
+  }
+});
+
 module.exports = router;

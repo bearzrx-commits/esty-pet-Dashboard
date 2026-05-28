@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import SupplierTasks from './pages/SupplierTasks';
+import Suppliers from './pages/Suppliers';
 import Logistics from './pages/Logistics';
 import Settings from './pages/Settings';
 
@@ -41,7 +42,7 @@ export default function App() {
 
               {/* 管理员路由 */}
               <Route path="suppliers" element={
-                <ProtectedRoute allowedRoles={['admin']}><SupplierTasks /></ProtectedRoute>
+                <ProtectedRoute allowedRoles={['admin']}><Suppliers /></ProtectedRoute>
               } />
 
               <Route path="logistics" element={<Logistics />} />
