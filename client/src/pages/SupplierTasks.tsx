@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Button, Space, Card, Modal, Input, message, Typography, Image, Descriptions, Divider, Empty, Select, Row, Col, Statistic } from 'antd';
-import { CheckCircleOutlined, PlayCircleOutlined, CloseCircleOutlined, ToolOutlined, EyeOutlined } from '@ant-design/icons';
-import { supplierApi } from '../api';
+import { Table, Tag, Button, Space, Card, Modal, Input, message, Typography, Image, Descriptions, Divider, Empty, Select, Row, Col, Statistic, Spin } from 'antd';
+import { CheckCircleOutlined, PlayCircleOutlined, CloseCircleOutlined, ToolOutlined, EyeOutlined, CloudUploadOutlined, LoadingOutlined } from '@ant-design/icons';
+import { supplierApi, uploadApi } from '../api';
 
 const { Title, Text } = Typography;
 const statusColors: Record<string, string> = { pending: 'orange', confirmed: 'blue', in_production: 'processing', completed: 'green', rejected: 'red' };
@@ -13,10 +13,13 @@ export default function SupplierTasks() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [pagination, setPagination] = useState({ total: 0, page: 1, pageSize: 20 });
   const [detailModal, setDetailModal] = useState<any>(null);
+  const [detailCustomerImages, setDetailCustomerImages] = useState<any[]>([]);
+  const [detailImagesLoading, setDetailImagesLoading] = useState(false);
   const [completeModal, setCompleteModal] = useState<any>(null);
   const [supplierNotes, setSupplierNotes] = useState('');
   const [rejectModal, setRejectModal] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [uploadImages, setUploadImages] = useState<any[]>([]);
 
   const loadTasks = async () => {
     setLoading(true);
@@ -58,6 +61,21 @@ export default function SupplierTasks() {
     } catch (err: any) { message.error(err.response?.data?.error || '操作失败'); }
   };
 
+  const handleOpenDetail = async (record: any) => {
+    setDetailModal(record);
+    setDetailImagesLoading(true);
+    setDetailCustomerImages([]);
+    try {
+      const data = await uploadApi.getOrderUploads(record.order_id);
+      const customerImgs = (data?.images || []).filter((img: any) => img.image_type === 'customer_upload');
+      setDetailCustomerImages(customerImgs);
+    } catch (e) {
+      // 静默失败，客户图片不是必需的
+    } finally {
+      setDetailImagesLoading(false);
+    }
+  };
+
   const stats = { total: tasks.length, pending: tasks.filter(t => t.status === 'pending').length, inProduction: tasks.filter(t => t.status === 'in_production').length, completed: tasks.filter(t => t.status === 'completed').length };
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
@@ -65,7 +83,24 @@ export default function SupplierTasks() {
     { title: '订单号', dataIndex: 'etsy_order_id', key: 'etsy_order_id', render: (v: string) => v || '-', width: 140 },
     { title: '客户', dataIndex: 'customer_name', key: 'customer_name', width: 120 },
     { title: '商品', key: 'items', render: (_: any, r: any) => (r.items || []).map((i: any) => i.name).join(' / ') || '-', ellipsis: true },
-    { title: '图片', key: 'images', render: (_: any, r: any) => { const imgs = r.images || []; if (!imgs.length) return <Text type="secondary">无</Text>; return <Image.PreviewGroup><Space size={4}>{imgs.slice(0, 3).map((img: any, i: number) => <Image key={i} src={img.url || img.image_url} width={36} height={36} style={{ borderRadius: 4, objectFit: 'cover' }} preview={{ mask: null }} />)}</Space></Image.PreviewGroup>; }, width: 120 },
+    {
+      title: '图片', key: 'images', width: 140,
+      render: (_: any, r: any) => {
+        const imgs = r.images || [];
+        if (!imgs.length) return <Text type="secondary">无</Text>;
+        return (
+          <Image.PreviewGroup>
+            <Space size={4} wrap>
+              {imgs.slice(0, 3).map((img: any, i: number) => (
+                <Image key={i} src={img.url || img.image_url} width={36} height={36}
+                  style={{ borderRadius: 4, objectFit: 'cover' }} preview={{ mask: null }}
+                  fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzYiIGhlaWdodD0iMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjM2IiBoZWlnaHQ9IjM2IiBmaWxsPSIjZjBmMGYwIi8+PC9zdmc+" />
+              ))}
+            </Space>
+          </Image.PreviewGroup>
+        );
+      }
+    },
     { title: '金额', key: 'amount', render: (_: any, r: any) => `$${r.total_amount?.toFixed(2)}`, width: 100 },
     { title: '状态', dataIndex: 'status', key: 'status', render: (s: string) => <Tag color={statusColors[s]}>{statusLabels[s] || s}</Tag>, width: 100 },
     { title: '备注', dataIndex: 'admin_notes', key: 'admin_notes', render: (v: string) => v || '-', width: 150 },
@@ -73,7 +108,7 @@ export default function SupplierTasks() {
       title: '操作', key: 'action', width: 240, fixed: 'right' as const,
       render: (_: any, record: any) => (
         <Space>
-          <Button size="small" onClick={() => setDetailModal(record)}>详情</Button>
+          <Button size="small" onClick={() => handleOpenDetail(record)}>详情</Button>
           {record.status === 'pending' && <><Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={() => handleAccept(record.id)}>接单</Button><Button danger size="small" icon={<CloseCircleOutlined />} onClick={() => setRejectModal(record)}>拒绝</Button></>}
           {record.status === 'confirmed' && <Button type="primary" size="small" icon={<PlayCircleOutlined />} onClick={() => handleStartProduction(record.id)}>开始生产</Button>}
           {record.status === 'in_production' && <Button type="primary" size="small" icon={<ToolOutlined />} onClick={() => setCompleteModal(record)}>完成生产</Button>}
@@ -107,7 +142,7 @@ export default function SupplierTasks() {
           locale={{ emptyText: <Empty description="暂无任务" /> }} />
       </Card>
 
-      <Modal title="任务详情" open={!!detailModal} onCancel={() => setDetailModal(null)} footer={null} width={600}>
+      <Modal title="任务详情" open={!!detailModal} onCancel={() => setDetailModal(null)} footer={null} width={680}>
         {detailModal && <div>
           <Descriptions column={1} size="small" bordered>
             <Descriptions.Item label="订单号">{detailModal.etsy_order_id || '-'}</Descriptions.Item>
@@ -118,13 +153,35 @@ export default function SupplierTasks() {
             <Descriptions.Item label="收货地址">{detailModal.shipping_address || '-'}</Descriptions.Item>
             <Descriptions.Item label="管理员备注">{detailModal.admin_notes || '无'}</Descriptions.Item>
           </Descriptions>
+
           <Divider />
           <Text strong>商品明细：</Text>
           {(detailModal.items || []).map((item: any, i: number) => <div key={i} style={{ marginTop: 8 }}>{item.name} × {item.quantity} — ${item.price?.toFixed(2)}</div>)}
+
           {(detailModal.images || []).length > 0 && <>
-            <Divider /><Text strong>图片：</Text>
+            <Divider /><Text strong>产品参考图：</Text>
             <Image.PreviewGroup><Space wrap style={{ marginTop: 8 }}>{(detailModal.images || []).map((img: any, i: number) => <Image key={i} src={img.url || img.image_url} width={150} style={{ borderRadius: 8, objectFit: 'cover' }} />)}</Space></Image.PreviewGroup>
           </>}
+
+          {/* 客户上传图片 */}
+          <Divider />
+          <Text strong>客户上传定制图：</Text>
+          {detailImagesLoading ? (
+            <div style={{ textAlign: 'center', padding: 20 }}><Spin indicator={<LoadingOutlined />} /></div>
+          ) : detailCustomerImages.length > 0 ? (
+            <Image.PreviewGroup>
+              <Space wrap style={{ marginTop: 8 }}>
+                {detailCustomerImages.map((img: any, i: number) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Image src={img.image_url} width={180} style={{ borderRadius: 8, objectFit: 'cover' }} />
+                    {img.description && <Text type="secondary" style={{ fontSize: 11, marginTop: 4 }}>{img.description}</Text>}
+                  </div>
+                ))}
+              </Space>
+            </Image.PreviewGroup>
+          ) : (
+            <Text type="secondary" style={{ marginTop: 8, display: 'block' }}>暂无客户上传图片</Text>
+          )}
         </div>}
       </Modal>
 

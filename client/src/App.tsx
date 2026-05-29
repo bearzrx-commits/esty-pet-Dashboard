@@ -13,6 +13,7 @@ import SupplierTasks from './pages/SupplierTasks';
 import Suppliers from './pages/Suppliers';
 import Logistics from './pages/Logistics';
 import Settings from './pages/Settings';
+import CustomerUpload from './pages/CustomerUpload';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/upload" element={<CustomerUpload />} />
 
             <Route path="/" element={
               <ProtectedRoute><AppLayout /></ProtectedRoute>

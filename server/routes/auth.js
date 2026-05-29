@@ -119,4 +119,49 @@ router.put('/users/:id', authenticate, requireAdmin, async (req, res) => {
   }
 });
 
+// 修改密码（所有已登录用户）
+router.put('/change-password', authenticate, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) return res.status(400).json({ error: '请提供原密码和新密码' });
+    if (newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
+
+    const user = await db.queryOne('users', { where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+
+    const valid = await bcrypt.compare(oldPassword, user.password);
+    if (!valid) return res.status(400).json({ error: '原密码错误' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.update('users', req.user.id, { password: hashedPassword });
+    res.json({ success: true, message: '密码修改成功' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: '密码修改失败' });
+  }
+});
+
+// 更新个人信息（所有已登录用户）
+router.put('/profile', authenticate, async (req, res) => {
+  try {
+    const { name, email, phone } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (email !== undefined) updates.email = email;
+    if (phone !== undefined) updates.phone = phone;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: '没有要更新的字段' });
+    }
+
+    const updated = await db.update('users', req.user.id, updates);
+    if (!updated || updated.length === 0) return res.status(404).json({ error: '用户不存在' });
+    const { password, ...userInfo } = updated[0];
+    res.json(userInfo);
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: '更新个人信息失败' });
+  }
+});
+
 module.exports = router;

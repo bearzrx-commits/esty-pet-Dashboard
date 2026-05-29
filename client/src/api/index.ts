@@ -35,6 +35,9 @@ export const authApi = {
   getUsers: () => api.get('/auth/users').then(r => r.data),
   createUser: (data: any) => api.post('/auth/users', data).then(r => r.data),
   updateUser: (id: string, data: any) => api.put(`/auth/users/${id}`, data).then(r => r.data),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    api.put('/auth/change-password', { oldPassword, newPassword }).then(r => r.data),
+  updateProfile: (data: any) => api.put('/auth/profile', data).then(r => r.data),
 };
 
 // ====== 仪表盘 API ======
@@ -79,6 +82,13 @@ export const logisticsApi = {
 export const etsyApi = {
   testConnection: () => api.get('/etsy/test-connection').then(r => r.data),
   syncOrders: () => api.post('/etsy/sync-orders').then(r => r.data),
+};
+
+// ====== 上传 API ======
+export const uploadApi = {
+  generateToken: (orderId: string) => api.post(`/uploads/token/${orderId}`).then(r => r.data),
+  getOrderUploads: (orderId: string) => api.get(`/uploads/order/${orderId}`).then(r => r.data),
+  updateImageNote: (id: string, description: string) => api.put(`/uploads/images/${id}`, { description }).then(r => r.data),
 };
 
 export default api;

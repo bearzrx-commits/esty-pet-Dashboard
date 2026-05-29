@@ -7,6 +7,7 @@ const supabase = require('./supabase');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'etsy-admin-secret-key-2026';
 
+const db = require('./db');
 const app = express();
 
 app.use(cors());
@@ -20,6 +21,8 @@ app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/logistics', require('./routes/logistics'));
 app.use('/api/tracking', require('./routes/tracking'));
 app.use('/api/etsy', require('./routes/etsy'));
+app.use('/api/uploads', require('./routes/uploads'));
+app.use('/api/customer-upload', require('./routes/customer-upload'));
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -84,15 +87,44 @@ app.get('/api/dashboard/stats', async (req, res) => {
     if (isSupplier) recentQuery = recentQuery.eq('supplier_id', user.id);
     const { data: recentOrders } = await recentQuery.order('created_at', { ascending: false }).limit(10);
 
+    // 计算总收入（已完成订单）
+    let revenueQ = supabase.from('orders').select('total_amount').eq('status', 'completed');
+    if (isSupplier) revenueQ = revenueQ.eq('supplier_id', user.id);
+    const { data: completedRevenueData } = await revenueQ;
+    const totalRevenue = (completedRevenueData || []).reduce((sum, o) => sum + (parseFloat(o.total_amount) || 0), 0);
+
+    // 物流状态分布
+    let shippingQ = supabase.from('logistics').select('status');
+    if (isSupplier) {
+      const { data: supplierOrderIds } = await supabase.from('supplier_orders').select('order_id').eq('supplier_id', user.id);
+      const orderIds = (supplierOrderIds || []).map(s => s.order_id);
+      if (orderIds.length > 0) shippingQ = shippingQ.in('order_id', orderIds);
+      else shippingQ = null;
+    }
+    let shippingStatsData = [];
+    if (shippingQ) {
+      const { data: ssd } = await shippingQ;
+      shippingStatsData = ssd || [];
+    }
+    const statusLabelMap = { pending: '待发货', picked_up: '已揽收', in_transit: '运输中', delivered: '已签收', exception: '异常' };
+    const shippingStats = Object.entries(
+      (shippingStatsData || []).reduce((acc, item) => {
+        const label = statusLabelMap[item.status] || item.status;
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([status, cnt]) => ({ status, cnt }));
+
     res.json({
       stats: {
         totalOrders: totalOrders.count || 0,
         pendingOrders: pendingOrders.count || 0,
         inProduction: inProduction.count || 0,
         completedOrders: completedOrders.count || 0,
-        totalRevenue: 0,
+        totalRevenue,
       },
       supplierStats,
+      shippingStats,
       recentOrders: (recentOrders || []).map(o => ({
         ...o,
         statusLabel: ({ pending: '待处理', confirmed: '已确认', in_production: '生产中', completed: '已完成', shipped: '已发货', cancelled: '已取消' })[o.status] || o.status,

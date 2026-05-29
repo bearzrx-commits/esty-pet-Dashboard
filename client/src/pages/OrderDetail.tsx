@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Image, Table, Timeline, Button, Space, Spin, Typography, Divider, Steps, Select, Input, message, Modal, Empty } from 'antd';
-import { ArrowLeftOutlined, CheckCircleOutlined, CarOutlined, UserOutlined, SendOutlined } from '@ant-design/icons';
-import { orderApi, authApi, supplierApi, logisticsApi } from '../api';
+import { ArrowLeftOutlined, CheckCircleOutlined, CarOutlined, UserOutlined, SendOutlined, CloudUploadOutlined, LinkOutlined, CopyOutlined } from '@ant-design/icons';
+import { orderApi, authApi, supplierApi, logisticsApi, uploadApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import TrackingTimeline from '../components/TrackingTimeline';
 
@@ -27,6 +27,9 @@ export default function OrderDetail() {
   const [adminNotes, setAdminNotes] = useState('');
   const [logisticsForm, setLogisticsForm] = useState({ carrier: '', tracking_number: '', weight_kg: '' });
   const [trackingModal, setTrackingModal] = useState<any>(null);
+  const [uploadImages, setUploadImages] = useState<any[]>([]);
+  const [uploadLink, setUploadLink] = useState('');
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   useEffect(() => { loadOrder(); if (isAdmin) loadSuppliers(); }, [id]);
 
@@ -36,8 +39,36 @@ export default function OrderDetail() {
       setOrder(data.order);
       setSupplierOrders(data.supplierOrders || []);
       setLogistics(data.logistics || []);
+      // 加载客户上传的图片
+      try {
+        const uploadData = await uploadApi.getOrderUploads(id!);
+        setUploadImages(uploadData.images || []);
+        const activeToken = (uploadData.tokens || []).find((t: any) => !t.used);
+        if (activeToken) {
+          const baseUrl = window.location.origin;
+          setUploadLink(`${baseUrl}/upload?token=${activeToken.token}`);
+        }
+      } catch (e) { /* ignore */ }
     } catch (err) { message.error('加载订单失败'); }
     finally { setLoading(false); }
+  };
+
+  const handleGenerateLink = async () => {
+    setGeneratingLink(true);
+    try {
+      const data = await uploadApi.generateToken(id!);
+      setUploadLink(data.url);
+      message.success('上传链接已生成');
+    } catch (err: any) {
+      message.error(err.response?.data?.error || '生成链接失败');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(uploadLink);
+    message.success('链接已复制到剪贴板');
   };
 
   const loadSuppliers = async () => {
@@ -113,6 +144,11 @@ export default function OrderDetail() {
             {(currentStep >= 2) && isAdmin && (
               <Button type="primary" onClick={() => setLogisticsModal(true)}><CarOutlined /> 创建物流</Button>
             )}
+            {isAdmin && (
+              <Button onClick={handleGenerateLink} loading={generatingLink} icon={<CloudUploadOutlined />}>
+                生成上传链接
+              </Button>
+            )}
           </Space>
         </div>
 
@@ -150,6 +186,51 @@ export default function OrderDetail() {
         />
 
         <Divider orientation="left">客户上传的图片</Divider>
+        {uploadImages.length > 0 && (
+          <>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              <CloudUploadOutlined style={{ color: '#1677ff', marginRight: 4 }} />
+              客户已上传 {uploadImages.length} 张定制图片
+            </Text>
+            <Image.PreviewGroup>
+              <Space wrap size={12} style={{ marginBottom: 16 }}>
+                {uploadImages.map((img: any, i: number) => (
+                  <div key={i} style={{ textAlign: 'center' }}>
+                    <Image src={img.image_url} width={180} height={180} style={{ borderRadius: 8, objectFit: 'cover', border: '2px solid #1677ff' }} fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjY2NjIj5JbWFnZTwvdGV4dD48L3N2Zz4=" />
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>{img.description || ''}</div>
+                  </div>
+                ))}
+              </Space>
+            </Image.PreviewGroup>
+          </>
+        )}
+
+        {/* 上传链接生成区 */}
+        <Card size="small" style={{ background: '#f6ffed', border: '1px solid #b7eb8f', marginBottom: 16 }}>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Text strong><CloudUploadOutlined /> 客户图片上传链接</Text>
+            {uploadLink ? (
+              <Space style={{ width: '100%' }}>
+                <Input.Search
+                  value={uploadLink}
+                  readOnly
+                  enterButton={<><CopyOutlined /> 复制</>}
+                  onSearch={handleCopyLink}
+                  style={{ flex: 1 }}
+                />
+                <Button icon={<LinkOutlined />} onClick={() => window.open(uploadLink, '_blank')}>打开</Button>
+              </Space>
+            ) : (
+              <Button onClick={handleGenerateLink} loading={generatingLink}>
+                生成上传链接
+              </Button>
+            )}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              将此链接发送给客户，客户打开后即可上传定制图片。链接有效期 7 天。
+            </Text>
+          </Space>
+        </Card>
+
         {order.images && order.images.length > 0 ? (
           <Image.PreviewGroup>
             <Space wrap size={12}>
@@ -162,7 +243,7 @@ export default function OrderDetail() {
             </Space>
           </Image.PreviewGroup>
         ) : (
-          <Empty description="暂无图片" />
+          uploadImages.length === 0 && <Empty description="暂无客户上传的图片。请先生成上传链接发送给客户。" />
         )}
 
         {supplierOrders.length > 0 && (
