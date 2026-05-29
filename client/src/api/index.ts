@@ -81,7 +81,29 @@ export const logisticsApi = {
 // ====== Etsy API ======
 export const etsyApi = {
   testConnection: () => api.get('/etsy/test-connection').then(r => r.data),
-  syncOrders: () => api.post('/etsy/sync-orders').then(r => r.data),
+  syncOrders: (autoSend?: boolean) =>
+    api.post('/etsy/sync-orders', { auto_send: autoSend }).then(r => r.data),
+};
+
+// ====== Etsy OAuth API ======
+export const etsyOAuthApi = {
+  /** 获取Etsy OAuth连接状态 */
+  getStatus: () => api.get('/etsy-oauth/status').then(r => r.data),
+  /** 获取Etsy授权链接（跳转用） */
+  getAuthorizeUrl: () => api.get('/etsy-oauth/authorize-url').then(r => r.data),
+  /** 断开Etsy连接 */
+  disconnect: () => api.post('/etsy-oauth/disconnect').then(r => r.data),
+  /** 通过Etsy消息发送上传链接给买家 */
+  sendUploadLink: (orderId: string, recipientUserId: number | string) =>
+    api.post('/etsy-oauth/send-upload-link', { orderId, recipientUserId }).then(r => r.data),
+  /** 发送自定义Etsy消息 */
+  sendMessage: (data: {
+    orderId?: string;
+    recipientUserId: number | string;
+    subject: string;
+    message: string;
+    shopId?: string;
+  }) => api.post('/etsy-oauth/send-message', data).then(r => r.data),
 };
 
 // ====== 上传 API ======

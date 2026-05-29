@@ -21,6 +21,7 @@ app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/logistics', require('./routes/logistics'));
 app.use('/api/tracking', require('./routes/tracking'));
 app.use('/api/etsy', require('./routes/etsy'));
+app.use('/api/etsy-oauth', require('./routes/etsy-oauth'));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/customer-upload', require('./routes/customer-upload'));
 

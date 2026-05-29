@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Image, Table, Timeline, Button, Space, Spin, Typography, Divider, Steps, Select, Input, message, Modal, Empty } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined, CarOutlined, UserOutlined, SendOutlined, CloudUploadOutlined, LinkOutlined, CopyOutlined } from '@ant-design/icons';
-import { orderApi, authApi, supplierApi, logisticsApi, uploadApi } from '../api';
+import { orderApi, authApi, supplierApi, logisticsApi, uploadApi, etsyOAuthApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import TrackingTimeline from '../components/TrackingTimeline';
 
@@ -30,8 +30,25 @@ export default function OrderDetail() {
   const [uploadImages, setUploadImages] = useState<any[]>([]);
   const [uploadLink, setUploadLink] = useState('');
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [sendingViaEtsy, setSendingViaEtsy] = useState(false);
+  const [etsyOAuthConnected, setEtsyOAuthConnected] = useState(false);
 
-  useEffect(() => { loadOrder(); if (isAdmin) loadSuppliers(); }, [id]);
+  useEffect(() => {
+    loadOrder();
+    if (isAdmin) {
+      loadSuppliers();
+      checkEtsyOAuth();
+    }
+  }, [id]);
+
+  const checkEtsyOAuth = async () => {
+    try {
+      const status = await etsyOAuthApi.getStatus();
+      setEtsyOAuthConnected(status.connected === true);
+    } catch (e) {
+      setEtsyOAuthConnected(false);
+    }
+  };
 
   const loadOrder = async () => {
     try {
@@ -69,6 +86,42 @@ export default function OrderDetail() {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(uploadLink);
     message.success('链接已复制到剪贴板');
+  };
+
+  const handleSendViaEtsyMessage = async () => {
+    if (!order.etsy_data?.buyer?.user_id) {
+      message.error('该订单没有买家 Etsy 用户信息，无法发送消息');
+      return;
+    }
+    if (!uploadLink) {
+      message.warning('请先生成上传链接');
+      return;
+    }
+    setSendingViaEtsy(true);
+    try {
+      // 先生成链接（如果还没有）
+      let link = uploadLink;
+      if (!link) {
+        const data = await uploadApi.generateToken(id!);
+        link = data.url;
+        setUploadLink(link);
+      }
+      // 通过 Etsy 消息发送
+      const result = await etsyOAuthApi.sendUploadLink(
+        id!,
+        order.etsy_data.buyer.user_id
+      );
+      message.success(`✓ 上传链接已通过 Etsy 消息发送给客户 (Conversation #${result.data?.conversation_id || ''})`);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || '发送失败';
+      if (errorMsg.includes('未授权') || errorMsg.includes('OAuth')) {
+        message.error('Etsy OAuth 未连接，请先到系统设置中连接 Etsy 账号');
+      } else {
+        message.error(`发送失败: ${errorMsg}`);
+      }
+    } finally {
+      setSendingViaEtsy(false);
+    }
   };
 
   const loadSuppliers = async () => {
@@ -210,16 +263,39 @@ export default function OrderDetail() {
           <Space direction="vertical" style={{ width: '100%' }}>
             <Text strong><CloudUploadOutlined /> 客户图片上传链接</Text>
             {uploadLink ? (
-              <Space style={{ width: '100%' }}>
-                <Input.Search
-                  value={uploadLink}
-                  readOnly
-                  enterButton={<><CopyOutlined /> 复制</>}
-                  onSearch={handleCopyLink}
-                  style={{ flex: 1 }}
-                />
-                <Button icon={<LinkOutlined />} onClick={() => window.open(uploadLink, '_blank')}>打开</Button>
-              </Space>
+              <>
+                <Space style={{ width: '100%' }}>
+                  <Input.Search
+                    value={uploadLink}
+                    readOnly
+                    enterButton={<><CopyOutlined /> 复制</>}
+                    onSearch={handleCopyLink}
+                    style={{ flex: 1 }}
+                  />
+                  <Button icon={<LinkOutlined />} onClick={() => window.open(uploadLink, '_blank')}>打开</Button>
+                </Space>
+                {isAdmin && etsyOAuthConnected && order?.etsy_data?.buyer?.user_id && (
+                  <div style={{ marginTop: 8 }}>
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      loading={sendingViaEtsy}
+                      onClick={handleSendViaEtsyMessage}
+                      style={{ background: '#d48806', borderColor: '#d48806' }}
+                    >
+                      通过 Etsy 消息发送给客户
+                    </Button>
+                    <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                      通过 Etsy Conversations 发送上传链接
+                    </Text>
+                  </div>
+                )}
+                {isAdmin && !etsyOAuthConnected && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#faad14' }}>
+                    需要先<a href="/settings" target="_blank" rel="noopener noreferrer">在系统设置中连接 Etsy 账号</a>，才能通过 Etsy 消息发送链接
+                  </div>
+                )}
+              </>
             ) : (
               <Button onClick={handleGenerateLink} loading={generatingLink}>
                 生成上传链接
